@@ -1,9 +1,13 @@
-import { All, Body, Controller, Get, Header, HttpCode, HttpException, HttpStatus, Param, Post, Query, Redirect, Req, Res } from "@nestjs/common";
+import { All, Body, Controller, Get, Header, HttpCode, Param, ParseIntPipe, Post, Query, Redirect, Req, Res, UseFilters, UseGuards, UsePipes } from "@nestjs/common";
 import { type Request } from "express";
-import { CreateCatDto } from "../dto/create-cat.dto";
+import { CreateCatSchema, type CreateCatDto } from "../dto/create-cat.dto";
 import { CatsService } from "../providers/cats.provider";
 import { Cat } from "../interfaces/cat.interface";
-import { ForbiddenException } from "../exceptions/forbidden.exception";
+import { ForbiddenException } from "../exceptions/forbidden.exception"; 
+import { HttpExceptionFilter } from "../exceptions/http-exception.filter";
+import { ZodValidationPipe } from "../pipes/validation.pipe";
+import { AuthGuard } from "../guards/auth.guard";
+import { Roles } from "../decorators/roles.decorator";
 
 @Controller({
     path: 'cats',
@@ -23,6 +27,11 @@ export class CatsController {
   }
   
   @Post('create')
+  @Roles(['admin'])
+  // alternatively, you can use the @SetMetadata() decorator to create a custom decorator for roles, but using the Reflector.createDecorator() method is more concise and eliminates the need for an additional file and class
+  // @SetMetadata('roles', ['admin'])
+  @UseGuards(AuthGuard)
+  @UsePipes(new ZodValidationPipe(CreateCatSchema))
   @HttpCode(201)
   create(@Body() createCatDto: CreateCatDto, @Res({passthrough: true}) res, @Req() req: Request): string {
     try {
@@ -34,8 +43,10 @@ export class CatsController {
   }
 
   @All('all')
+  @UseFilters(HttpExceptionFilter)
   @HttpCode(200)
   allMethods(@Res({passthrough: true}) res, @Req() req: Request): string {
+    throw new ForbiddenException('This is a custom error message for all HTTP methods');
     return "This action handles all HTTP methods";
   }
 
@@ -46,7 +57,6 @@ export class CatsController {
   }
 
   // headers, query params, body, etc. can be accessed through the @Req() decorator and the Request object from Express
-
   // res headers example
   @Get('headers')
   @Header('X-Custom-Header', 'CustomHeaderValue')
@@ -68,7 +78,7 @@ export class CatsController {
   
   // route params example
   @Get(':id')
-  getCatById(@Param('id') id: string): string {
+  getCatById(@Param('id', ParseIntPipe) id: number): string {
     return `This action returns a cat with id: ${id}`;
   }
 }
